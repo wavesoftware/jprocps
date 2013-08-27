@@ -109,8 +109,11 @@ class JTop:
     self.done = False
     self.dirty_screen = False
 
-  def print_ps(self, ps, suffix=None, maxwidth=None):
-
+  def print_ps(self, ps, suffix=None, maxwidth=None, screen=None):
+    if screen != None:
+      screen.erase()
+      screen.move(0, 0)
+    out = ''
     basefmt = '%5s %5s %-10s %-5s %-5s '
     basefmtwidth = len(basefmt % (tuple(repeat('', 5))))
     if maxwidth != None:
@@ -122,12 +125,23 @@ class JTop:
     else:
       thread_name_fmt = '%s'
     fmt = basefmt + thread_name_fmt
-    if suffix != None:
+    if suffix != None and suffix != "\n":
       fmt = fmt + suffix
-    print fmt % ('PID', 'TID', 'USER', '%CPU', '%MEM', 'THREAD')
+    fmt += "\n"
+    out += fmt % ('PID', 'TID', 'USER', '%CPU', '%MEM', 'THREAD')
     columns = ('pid', 'tid', 'euser', '%cpu', '%mem', 'thread_name')
     for proc in ps:
-      print fmt % (tuple(map(lambda key: proc[key], columns)))
+      out += fmt % (tuple(map(lambda key: proc[key], columns)))
+    if screen != None:
+      if suffix != None:
+        out = out.replace(suffix, '')
+      out = out.split("\n")
+      i = 0
+      for line in out:
+        screen.addstr(i, 0, line)
+        i += 1
+    else:
+      print out
 
   def run_once(self):
     self.print_ps(self.merger.list_threads())
@@ -149,9 +163,13 @@ class JTop:
     delay = self.options.delay
     while delay > 0:
       start = time()
-      (read_ready, write_ready, err_ready) = select([sys.stdin], [], [], delay)
-      elapsed = time() - start
-      delay -= elapsed
+      try:
+        (read_ready, write_ready, err_ready) = select([sys.stdin], [], [], delay)
+      except:
+        continue
+      finally:
+        elapsed = time() - start
+        delay -= elapsed
       if read_ready:
         self._process_input(screen.getch())
         if self.dirty_screen:
@@ -173,7 +191,7 @@ class JTop:
         # Weird little hack seems to be needed on the first draw pass else
         # it will not take effect.  Draw twice on first run.
         for x in range(2 if first_run else 1):
-          self.print_ps(ps, '\r', maxx)
+          self.print_ps(ps, '\r', maxx, screen)
           screen.refresh()
         self._mark_clean()
         first_run = False
